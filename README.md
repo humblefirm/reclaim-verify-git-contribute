@@ -1,27 +1,50 @@
 # GitHub 레포지토리 컨트리뷰터 검증 앱 상세 구현 가이드
 
-이 가이드에서는 Reclaim Protocol을 사용하여 GitHub 레포지토리의 컨트리뷰터를 검증하는 Next.js 애플리케이션을 구현하는 전체 과정을 설명합니다. 이 앱은 사용자의 GitHub 사용자 이름을 확인하고, 특정 레포지토리의 컨트리뷰터인지 검증합니다.
+이 가이드는 Reclaim Protocol을 사용하여 GitHub 레포지토리의 컨트리뷰터를 검증하는 Next.js 애플리케이션을 만드는 전체 과정을 설명합니다.
 
-## 1. 메인 페이지 구현 (app/page.js)
+## 1. 프로젝트 설정
 
-메인 페이지에서는 GitHub 사용자 이름 확인 및 레포지토리 컨트리뷰터 검증 프로세스를 처리합니다.
+1. 새로운 Next.js 프로젝트를 생성합니다:
+
+   ```bash
+   npx create-next-app github-contributor-verification
+   cd github-contributor-verification
+   ```
+
+2. 필요한 패키지를 설치합니다:
+
+   ```bash
+   npm install @reclaimprotocol/js-sdk react-qr-code
+   ```
+
+3. `.env.local` 파일을 생성하고 다음 환경 변수를 설정합니다:
+
+   ```
+   NEXT_PUBLIC_APP_ID=your_app_id
+   APP_SECRET=your_app_secret
+   NEXT_PUBLIC_PROVIDER_ID=your_provider_id
+   NEXT_PUBLIC_REPO_OWNER=repository_owner
+   NEXT_PUBLIC_REPO_NAME=repository_name
+   ```
+
+   **주의**: `APP_SECRET`은 클라이언트 측에 노출되지 않도록 주의해야 합니다. 실제 구현에서는 서버 측에서 처리해야 합니다.
+
+## 2. 메인 페이지 구현 (app/page.js)
+
+`app/page.js` 파일을 다음과 같이 작성합니다:
 
 ```jsx
-// app/page.js
 "use client";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Reclaim } from "@reclaimprotocol/js-sdk";
 import QRCode from "react-qr-code";
 
-const APP_ID = "0x573cf0319aC1694E508A1A2e118475e2cD78981f";
-const APP_SECRET =
-  "0x565c4d0ef83cb5043bfdc5a3e55908131f2ace89b86aa3748a7c33c9d7b6edf8";
-const PROVIDER_ID = "6d3f6753-7ee6-49ee-a545-62f1b1822ae5"; // GitHub UserName
-
-// 여기에 확인하고자 하는 특정 레포지토리의 owner와 repo를 설정하세요.
-const REPO_OWNER = "humblefirm";
-const REPO_NAME = "guest-book";
+const APP_ID = process.env.NEXT_PUBLIC_APP_ID;
+const APP_SECRET = process.env.APP_SECRET; // 주의: 실제 구현에서는 서버 측에서 처리해야 합니다.
+const PROVIDER_ID = process.env.NEXT_PUBLIC_PROVIDER_ID;
+const REPO_OWNER = process.env.NEXT_PUBLIC_REPO_OWNER;
+const REPO_NAME = process.env.NEXT_PUBLIC_REPO_NAME;
 
 const GitHubVerification = () => {
   const [url, setUrl] = useState("");
@@ -162,12 +185,11 @@ const GitHubVerification = () => {
 export default GitHubVerification;
 ```
 
-## 2. 축하 페이지 구현 (app/congrats/page.js)
+## 3. 축하 페이지 구현 (app/congrats/page.js)
 
-검증에 성공한 사용자를 위한 축하 페이지를 구현합니다.
+`app/congrats/page.js` 파일을 다음과 같이 작성합니다:
 
 ```jsx
-// app/congrats/page.js
 "use client";
 import React from "react";
 import { useRouter } from "next/navigation";
@@ -206,21 +228,18 @@ const CongratulationsPage = () => {
 export default CongratulationsPage;
 ```
 
-## 3. GitHub API 연동 (app/api/github/[[...params]]/route.js)
+## 4. GitHub API 연동 (app/api/github/[[...params]]/route.js)
 
-GitHub API를 사용하여 레포지토리의 컨트리뷰터 목록을 가져오고, 특정 사용자의 컨트리뷰터 여부를 확인하는 API 라우트를 구현합니다.
+`app/api/github/[[...params]]/route.js` 파일을 다음과 같이 작성합니다:
 
 ```javascript
-// app/api/github/[[...params]]/route.js
 import { NextResponse } from "next/server";
 
 const GITHUB_API_URL = "https://api.github.com";
 
 export async function GET(request, { params }) {
-  // params 객체에서 params 배열 추출
   const { params: urlParams } = params;
 
-  // urlParams가 없거나 길이가 2 미만이면 에러
   if (!urlParams || urlParams.length < 2) {
     return NextResponse.json(
       { error: "Owner and repo parameters are required" },
@@ -274,7 +293,6 @@ async function fetchAllContributors(
   const contributors = await response.json();
   allContributors.push(...contributors);
 
-  // Check if there are more pages
   const linkHeader = response.headers.get("Link");
   if (linkHeader && linkHeader.includes('rel="next"')) {
     return fetchAllContributors(
@@ -290,26 +308,33 @@ async function fetchAllContributors(
 }
 ```
 
-## 구현 과정 및 주요 기능 설명
+## 5. 주요 기능 설명
 
-1. 메인 페이지 (app/page.js):
+### Reclaim Protocol 사용
 
-   - Reclaim Protocol을 사용하여 GitHub 사용자 이름을 확인합니다.
-   - QR 코드를 생성하여 사용자가 모바일 기기로 스캔할 수 있게 합니다.
-   - 사용자 이름 확인 후, GitHub API를 호출하여 컨트리뷰터 여부를 확인합니다.
-   - 검증 결과에 따라 적절한 피드백을 제공하고, 성공 시 축하 페이지로 이동합니다.
+- `reclaimClient`: Reclaim SDK를 초기화하여 GitHub 사용자 이름을 확인합니다.
+- `setupReclaimClient`: Reclaim 클라이언트를 설정하고 서명을 생성합니다.
+- `startReclaimSession`: Reclaim 세션을 시작하고 콜백 함수를 설정합니다.
+- `generateVerificationRequest`: 검증 요청을 생성하고 QR 코드 URL을 설정합니다.
 
-2. 축하 페이지 (app/congrats/page.js):
+### GitHub API 연동
 
-   - 검증 성공 시 사용자에게 축하 메시지를 표시합니다.
-   - 앱의 다음 단계로 진행할 수 있는 버튼을 제공합니다.
+- `fetchAllContributors`: GitHub API를 사용하여 레포지토리의 모든 컨트리뷰터를 가져옵니다.
+- 페이지네이션을 처리하여 대규모 레포지토리의 모든 컨트리뷰터를 확인합니다.
 
-3. GitHub API 연동 (app/api/github/[[...params]]/route.js):
-   - GitHub API를 사용하여 특정 레포지토리의 모든 컨트리뷰터 목록을 가져옵니다.
-   - 페이지네이션을 처리하여 대규모 레포지토리의 모든 컨트리뷰터를 확인합니다.
-   - 특정 사용자의 컨트리뷰터 여부를 확인하고 결과를 반환합니다.
+### 사용자 경험
 
-## 구현 시 주의사항
+- 상태 관리: 검증 과정의 각 단계를 사용자에게 표시합니다.
+- 에러 처리: 오류 발생 시 사용자에게 명확한 메시지를 제공합니다.
+- QR 코드: 모바일 기기에서 쉽게 스캔할 수 있도록 QR 코드를 생성합니다.
 
-- `APP_SECRET`은 서버 측에서 관리해야 합니다. 이 예제에서는 학습을 위해 클라이언트 측 코드에 포함되어 있지만, 실제 구현에서는 절대 이렇게 하면 안 됩니다.
-- API 키와 같은 민감한 정보는 환경 변수로 관리해야 합니다.
+## 6. 구현 시 주의사항
+
+1. 보안:
+
+   - `APP_SECRET`은 반드시 서버 측에서 관리해야 합니다. 이 예제에서는 학습을 위해 클라이언트 측 코드에 포함되어 있지만, 실제 구현에서는 절대 이렇게 하면 안 됩니다.
+   - API 키와 같은 민감한 정보는 환경 변수로 관리하세요.
+
+2. 성능:
+   - GitHub API 호출 결과를 캐싱하여 반복적인 요청을 줄이는 것을 고려하세요.
+   - 대규모 레포지토리의 경우 컨트리뷰터 목록 가져오기에 시간이 걸릴 수 있으므로, 백그라운드 작업으로 처리하는 방법을 고려하세요.

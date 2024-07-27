@@ -1,113 +1,136 @@
-import Image from "next/image";
+"use client";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Reclaim } from "@reclaimprotocol/js-sdk";
+import QRCode from "react-qr-code";
 
-export default function Home() {
+const APP_ID = "0x573cf0319aC1694E508A1A2e118475e2cD78981f";
+const APP_SECRET =
+  "0x565c4d0ef83cb5043bfdc5a3e55908131f2ace89b86aa3748a7c33c9d7b6edf8";
+const PROVIDER_ID = "6d3f6753-7ee6-49ee-a545-62f1b1822ae5"; // GitHub UserName
+
+// 여기에 확인하고자 하는 특정 레포지토리의 owner와 repo를 설정하세요.
+const REPO_OWNER = "Ludium-Official";
+const REPO_NAME = "road-to-global-stage";
+
+const GitHubVerification = () => {
+  const [url, setUrl] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  const reclaimClient = new Reclaim.ProofRequest(APP_ID);
+
+  const handleVerificationSuccess = async (proof) => {
+    console.log("Reclaim verification success", proof);
+    try {
+      // proof 구조에서 username 추출
+      const parameters = JSON.parse(proof[0].claimData.parameters);
+      const username = parameters.paramValues.username;
+
+      setStatus(
+        `GitHub username verified: ${username}. Checking repository contribution...`
+      );
+
+      // Call the API to verify if the user is a contributor
+      const response = await fetch(
+        `/api/github/${REPO_OWNER}/${REPO_NAME}/${username}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to verify contributor status");
+      }
+
+      const result = await response.json();
+      if (result.isContributor) {
+        setStatus("Verification successful! You are a contributor.");
+        router.push("/congrats");
+      } else {
+        setError("You are not a contributor to the specified repository.");
+      }
+    } catch (err) {
+      console.error("Server verification failed", err);
+      setError("Failed to verify contributor status. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleVerificationFailure = (error) => {
+    console.error("Reclaim verification failed", error);
+    setError("Verification failed. Please try again.");
+    setIsVerifying(false);
+  };
+
+  const setupReclaimClient = async () => {
+    await reclaimClient.buildProofRequest(PROVIDER_ID);
+    reclaimClient.setSignature(
+      await reclaimClient.generateSignature(APP_SECRET)
+    );
+  };
+
+  const startReclaimSession = () => {
+    reclaimClient.startSession({
+      onSuccessCallback: handleVerificationSuccess,
+      onFailureCallback: handleVerificationFailure,
+    });
+  };
+
+  const generateVerificationRequest = async () => {
+    setIsVerifying(true);
+    setStatus("Generating verification request...");
+    setError("");
+    try {
+      reclaimClient.addContext(
+        `user's GitHub username`,
+        "for repository contribution verification"
+      );
+      await setupReclaimClient();
+      const { requestUrl } = await reclaimClient.createVerificationRequest();
+      setUrl(requestUrl);
+      startReclaimSession();
+      setStatus("Scan the QR code to verify your GitHub username");
+    } catch (err) {
+      setError("Failed to generate verification request. Please try again.");
+      setIsVerifying(false);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div className="flex flex-col items-center justify-center min-h-screen p-24">
+      <h1 className="mb-8 text-4xl font-bold text-center">
+        GitHub Repo Contributor Verification
+      </h1>
+      <p className="mb-8 text-xl text-center">
+        Verify your contributions to the {REPO_OWNER}/{REPO_NAME} repository.
+      </p>
+      <button
+        onClick={generateVerificationRequest}
+        disabled={isVerifying}
+        className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+      >
+        {isVerifying ? "Verifying..." : "Verify GitHub Contributions"}
+      </button>
+      {status && (
+        <div className="mb-4 p-4 bg-blue-100 text-blue-700 border border-blue-200 rounded max-w-md w-full">
+          <p className="font-bold">Status</p>
+          <p>{status}</p>
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      )}
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-700 border border-red-200 rounded max-w-md w-full">
+          <p className="font-bold">Error</p>
+          <p>{error}</p>
+        </div>
+      )}
+      {url && (
+        <div className="mt-4">
+          <QRCode value={url} />
+        </div>
+      )}
+    </div>
   );
-}
+};
+
+export default GitHubVerification;

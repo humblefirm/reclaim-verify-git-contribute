@@ -10,14 +10,15 @@ const APP_SECRET =
 const PROVIDER_ID = "6d3f6753-7ee6-49ee-a545-62f1b1822ae5"; // GitHub UserName
 
 // 여기에 확인하고자 하는 특정 레포지토리의 owner와 repo를 설정하세요.
-const REPO_OWNER = "Ludium-Official";
-const REPO_NAME = "road-to-global-stage";
+const REPO_OWNER = "humblefirm";
+const REPO_NAME = "guest-book";
 
 const GitHubVerification = () => {
   const [url, setUrl] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [showContributeOption, setShowContributeOption] = useState(false);
   const router = useRouter();
 
   const reclaimClient = new Reclaim.ProofRequest(APP_ID);
@@ -25,7 +26,6 @@ const GitHubVerification = () => {
   const handleVerificationSuccess = async (proof) => {
     console.log("Reclaim verification success", proof);
     try {
-      // proof 구조에서 username 추출
       const parameters = JSON.parse(proof[0].claimData.parameters);
       const username = parameters.paramValues.username;
 
@@ -33,7 +33,6 @@ const GitHubVerification = () => {
         `GitHub username verified: ${username}. Checking repository contribution...`
       );
 
-      // Call the API to verify if the user is a contributor
       const response = await fetch(
         `/api/github/${REPO_OWNER}/${REPO_NAME}/${username}`
       );
@@ -48,6 +47,7 @@ const GitHubVerification = () => {
         router.push("/congrats");
       } else {
         setError("You are not a contributor to the specified repository.");
+        setShowContributeOption(true);
       }
     } catch (err) {
       console.error("Server verification failed", err);
@@ -81,6 +81,7 @@ const GitHubVerification = () => {
     setIsVerifying(true);
     setStatus("Generating verification request...");
     setError("");
+    setShowContributeOption(false);
     try {
       reclaimClient.addContext(
         `user's GitHub username`,
@@ -95,6 +96,10 @@ const GitHubVerification = () => {
       setError("Failed to generate verification request. Please try again.");
       setIsVerifying(false);
     }
+  };
+
+  const handleContribute = () => {
+    window.open(`https://github.com/${REPO_OWNER}/${REPO_NAME}`, "_blank");
   };
 
   return (
@@ -122,6 +127,17 @@ const GitHubVerification = () => {
         <div className="mb-4 p-4 bg-red-100 text-red-700 border border-red-200 rounded max-w-md w-full">
           <p className="font-bold">Error</p>
           <p>{error}</p>
+        </div>
+      )}
+      {showContributeOption && (
+        <div className="mt-4 text-center">
+          <p className="mb-2">Want to become a contributor?</p>
+          <button
+            onClick={handleContribute}
+            className="px-4 py-2 font-bold text-white bg-green-500 rounded hover:bg-green-700"
+          >
+            Contribute Now
+          </button>
         </div>
       )}
       {url && (

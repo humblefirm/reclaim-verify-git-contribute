@@ -1,3 +1,4 @@
+// app/api/github/%5B%5B...params%5D%5D/route.js
 import { NextResponse } from "next/server";
 
 const GITHUB_API_URL = "https://api.github.com";
